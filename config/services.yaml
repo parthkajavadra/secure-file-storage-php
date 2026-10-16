@@ -1,0 +1,43 @@
+parameters:
+    app.storage_dir: '%env(resolve:STORAGE_DIR)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\Service\FileStorage:
+        arguments:
+            $storageDir: '%app.storage_dir%'
+
+    App\Service\ClamAvScanner:
+        arguments:
+            $host: '%env(CLAMAV_HOST)%'
+            $port: '%env(int:CLAMAV_PORT)%'
+
+    App\Service\VirusScannerInterface: '@App\Service\ClamAvScanner'
+
+    App\EventSubscriber\ThrottleSubscriber:
+        arguments:
+            $userLimiter: '@limiter.api_user'
+            $anonLimiter: '@limiter.api_anon'
+            $publicLinkLimiter: '@limiter.public_link'
+
+    # "2026-10-16 12:00:00 [WARNING] message" — same shape as the Django log formatter
+    app.log_formatter:
+        class: Monolog\Formatter\LineFormatter
+        arguments:
+            - "%%datetime%% [%%level_name%%] %%message%%\n"
+            - 'Y-m-d H:i:s'
+
+when@test:
+    services:
+        # Tests never talk to a real ClamAV daemon.
+        App\Service\VirusScannerInterface:
+            class: App\Tests\Support\FakeVirusScanner

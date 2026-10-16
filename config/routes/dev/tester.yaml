@@ -1,0 +1,5 @@
+# Browser page for testing the API by hand (development only).
+dev_tester:
+    path: /tester
+    controller: App\Controller\DevTesterController
+    methods: [GET]

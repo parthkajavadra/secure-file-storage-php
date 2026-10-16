@@ -1,0 +1,51 @@
+security:
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: username
+
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        # POST /api/token/  (SimpleJWT TokenObtainPairView)
+        login:
+            pattern: ^/api/token/$
+            stateless: true
+            json_login:
+                check_path: api_token
+                username_path: username
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
+        # Everything else under /api: Bearer JWT, plus POST /api/token/refresh/
+        api:
+            pattern: ^/api
+            stateless: true
+            entry_point: jwt
+            jwt: ~
+            refresh_jwt:
+                check_path: api_token_refresh
+
+    # DRF DEFAULT_PERMISSION_CLASSES = IsAuthenticated, with AllowAny on register / public links
+    access_control:
+        - { path: ^/api/token/, roles: PUBLIC_ACCESS }
+        - { path: ^/api/storage/register/$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/storage/public/, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+
+when@test:
+    security:
+        password_hashers:
+            # Fast hashing in tests
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                algorithm: auto
+                cost: 4
+                time_cost: 3
+                memory_cost: 10

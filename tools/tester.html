@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Tester · Secure File Storage</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+    --accent: #2f5bea; --accent-text: #ffffff; --ok: #157f3b; --ok-bg: #e7f6ec; --err: #b42318; --err-bg: #fdecea;
+    --warn: #8a5a00; --warn-bg: #fff4dc; --code: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b1f27; --text: #e6e9ef; --muted: #98a2b3; --line: #2c323d;
+      --accent: #6b8cff; --accent-text: #0d1220; --ok: #6fd28f; --ok-bg: #16301f; --err: #ff8a80; --err-bg: #3a1916;
+      --warn: #f5c76b; --warn-bg: #352a12; --code: #232833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px 20px 6px; max-width: 1280px; margin: 0 auto; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 16px; padding: 12px 20px 40px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } .log { position: static; max-height: none; } }
+  @media (max-width: 600px) { main, header { padding-left: 12px; padding-right: 12px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+  h2 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  h2 .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 12px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: -4px 0 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 8px; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); flex: 1 1 130px; min-width: 0; }
+  label input, label select { width: 100%; }
+  .table-wrap { overflow-x: auto; }
+  input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+  input[type=file] { padding: 4px; }
+  button { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  button.secondary { background: transparent; color: var(--accent); }
+  button.small { padding: 3px 8px; font-size: 12.5px; }
+  button.danger { background: transparent; color: var(--err); border-color: var(--err); }
+  .checks { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px 2px; margin-top: 10px; }
+  .checks-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .who { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; background: var(--bg); color: var(--text); }
+  .chip.active { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.actions { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--code); }
+  .empty { color: var(--muted); padding: 10px 0; }
+  .link-out { word-break: break-all; background: var(--code); padding: 8px; border-radius: 6px; margin-top: 8px; display: none; }
+  .log { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+  .entry { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+  .entry .head { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 12.5px; }
+  .entry .status { font-weight: 700; padding: 1px 7px; border-radius: 5px; }
+  .s-ok .status { background: var(--ok-bg); color: var(--ok); }
+  .s-warn .status { background: var(--warn-bg); color: var(--warn); }
+  .s-err .status { background: var(--err-bg); color: var(--err); }
+  .entry .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .entry .who-tag { margin-left: auto; color: var(--muted); white-space: nowrap; }
+  .entry pre { margin: 0; padding: 8px 10px; background: var(--code); font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Secure File Storage · API Tester</h1>
+  <p>Development only. Every request and its response appears in the log on the right.</p>
+</header>
+
+<main>
+<div>
+  <section>
+    <h2><span class="n">1</span>Account</h2>
+    <p class="hint">Register users, log in, then pick who you are acting as. Log in two users to test sharing and blocked access.</p>
+    <div class="row">
+      <label>Username <input id="username" value="parth" autocomplete="off"></label>
+      <label>Password <input id="password" type="password" value="pw-parth"></label>
+      <button id="btn-register" class="secondary">Register</button>
+      <button id="btn-login">Log in</button>
+    </div>
+    <div class="who" id="who"><span class="note">Acting as:</span><span class="note" id="who-none">nobody yet</span></div>
+    <div class="row" style="margin-top:8px">
+      <button id="btn-refresh" class="secondary small">Refresh token</button>
+      <button id="btn-logout" class="secondary small">Log out selected user</button>
+      <button id="btn-notoken" class="secondary small">Request without token</button>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Upload a file</h2>
+    <p class="hint">Allowed: PDF, JPEG, PNG, plain text, up to 2 MB. Files are virus-scanned by ClamAV first.</p>
+    <div class="row">
+      <label>File <input id="file" type="file"></label>
+      <label>Title <input id="title" placeholder="optional"></label>
+      <label>Access
+        <select id="access">
+          <option value="private">private</option>
+          <option value="shared">shared</option>
+          <option value="public">public</option>
+        </select>
+      </label>
+      <label>Share with user IDs <input id="sharedWith" placeholder="e.g. 2,3" size="8"></label>
+      <button id="btn-upload">Upload</button>
+    </div>
+    <div class="checks">
+      <div class="checks-title">Security checks — these uploads are <strong>meant to be rejected</strong> and ignore the file chosen above</div>
+      <div class="row">
+        <button id="btn-eicar" class="danger small">Send EICAR test virus</button>
+        <button id="btn-badtype" class="danger small">Send a GIF (not allowed)</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>Files you can access</h2>
+    <p class="hint">Your files, public files, and files shared with you. Try the download as another user to see the access check.</p>
+    <div class="row"><button id="btn-list" class="secondary small">Reload list</button></div>
+    <div id="files"><div class="empty">Log in to see files.</div></div>
+    <div class="row" style="margin-top:10px">
+      <label>Download any file ID <input id="dlId" size="5" placeholder="1"></label>
+      <button id="btn-dl" class="secondary">Download</button>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>Share</h2>
+    <div class="row">
+      <label>File ID <input id="shareId" size="5"></label>
+      <label>With username <input id="shareUser" placeholder="bob"></label>
+      <button id="btn-share">Share with user</button>
+    </div>
+    <div class="row">
+      <label>File ID <input id="linkId" size="5"></label>
+      <label>Expires in (minutes) <input id="linkMinutes" type="number" value="5" style="width:90px"></label>
+      <button id="btn-link">Create public link</button>
+    </div>
+    <div class="link-out" id="linkOut"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span>Open a public link</h2>
+    <p class="hint">Sent without any login. Try an expired or made-up link too.</p>
+    <div class="row">
+      <label style="flex:1">Public link <input id="publicUrl" placeholder="http://127.0.0.1:8000/api/storage/public/…/"></label>
+      <button id="btn-public">Download</button>
+    </div>
+  </section>
+</div>
+
+<aside>
+  <section class="log">
+    <h2>Response log <button id="btn-clear" class="secondary small" style="margin-left:auto">Clear</button></h2>
+    <div id="log"><div class="empty">Requests will appear here.</div></div>
+  </section>
+</aside>
+</main>
+
+<script>
+const API = location.origin;
+const accounts = {};      // username -> { id, access, refresh }
+let current = null;       // username currently acting
+const $ = (id) => document.getElementById(id);
+
+function log(method, path, status, body, who, note) {
+  const box = $('log');
+  if (box.querySelector('.empty')) box.innerHTML = '';
+  const cls = status >= 200 && status < 300 ? 's-ok' : (status === 429 || status === 0 ? 's-warn' : 's-err');
+  const el = document.createElement('div');
+  el.className = 'entry ' + cls;
+  const head = document.createElement('div');
+  head.className = 'head';
+  head.innerHTML = '<span class="status"></span><span class="path"></span><span class="who-tag"></span>';
+  head.querySelector('.status').textContent = status || 'ERR';
+  head.querySelector('.path').textContent = method + ' ' + path;
+  head.querySelector('.who-tag').textContent = who ? 'as ' + who : 'no token';
+  const pre = document.createElement('pre');
+  pre.textContent = (note ? note + '\n\n' : '') + (typeof body === 'string' ? body : JSON.stringify(body, null, 2));
+  el.append(head, pre);
+  box.prepend(el);
+}
+
+async function call(method, path, { json, form, auth = true, who = current, retry = true, note } = {}) {
+  const headers = {};
+  const acct = who ? accounts[who] : null;
+  if (auth && acct) headers['Authorization'] = 'Bearer ' + acct.access;
+  let body;
+  if (json !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(json); }
+  if (form) body = form;
+  let res;
+  try {
+    res = await fetch(API + path, { method, headers, body });
+  } catch (e) {
+    log(method, path, 0, 'Network error: ' + e.message + '\nIs the server running?', auth ? who : null);
+    return { status: 0 };
+  }
+  const type = res.headers.get('Content-Type') || '';
+  const disposition = res.headers.get('Content-Disposition');
+  if (disposition && res.ok) {
+    const blob = await res.blob();
+    const name = (disposition.match(/filename="?([^";]+)"?/) || [])[1] || 'download';
+    saveBlob(blob, name);
+    const preview = type.startsWith('text/') ? '\n\n' + (await blob.text()).slice(0, 500) : '';
+    log(method, path, res.status, `File downloaded: ${name} (${blob.size} bytes)${preview}`, auth ? who : null);
+    return { status: res.status };
+  }
+  const data = type.includes('json') ? await res.json() : await res.text();
+  // Access tokens live 5 minutes: refresh once automatically and retry.
+  if (res.status === 401 && data && data.code === 'token_not_valid' && retry && acct && acct.refresh) {
+    log(method, path, res.status, data, who);
+    if (await refreshToken(who)) return call(method, path, { json, form, auth, who, retry: false, note });
+  }
+  log(method, path, res.status, data, auth ? who : null, note);
+  return { status: res.status, data };
+}
+
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function refreshToken(who = current) {
+  const acct = accounts[who];
+  if (!acct) return false;
+  const r = await call('POST', '/api/token/refresh/', { json: { refresh: acct.refresh }, auth: false, retry: false });
+  if (r.status === 200) { acct.access = r.data.access; if (r.data.refresh) acct.refresh = r.data.refresh; return true; }
+  return false;
+}
+
+function renderWho() {
+  const box = $('who');
+  box.querySelectorAll('.chip').forEach((c) => c.remove());
+  $('who-none').style.display = Object.keys(accounts).length ? 'none' : '';
+  for (const name of Object.keys(accounts)) {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (name === current ? ' active' : '');
+    chip.textContent = name + (accounts[name].id ? ' (id ' + accounts[name].id + ')' : '');
+    chip.onclick = () => { current = name; renderWho(); loadFiles(); };
+    box.append(chip);
+  }
+}
+
+async function loadFiles() {
+  if (!current) { $('files').innerHTML = '<div class="empty">Log in to see files.</div>'; return; }
+  const r = await call('GET', '/api/storage/files/');
+  if (r.status !== 200) return;
+  if (!r.data.length) { $('files').innerHTML = '<div class="empty">No files yet — upload one above.</div>'; return; }
+  const ownerNames = Object.fromEntries(Object.entries(accounts).map(([n, a]) => [a.id, n]));
+  const t = document.createElement('table');
+  t.innerHTML = '<tr><th>ID</th><th>File</th><th>Title</th><th>Access</th><th>Owner</th><th>Shared with</th><th></th></tr>';
+  for (const f of r.data) {
+    const tr = document.createElement('tr');
+    const name = (id) => ownerNames[id] || ('user ' + id);
+    const cells = [f.id, f.file, f.title || '—', null, name(f.owner), f.shared_with.length ? f.shared_with.map(name).join(', ') : '—'];
+    cells.forEach((v, i) => {
+      const td = document.createElement('td');
+      if (i === 3) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = f.access_level; td.append(b); }
+      else td.textContent = v;
+      tr.append(td);
+    });
+    const actions = document.createElement('td');
+    actions.className = 'actions';
+    const dl = document.createElement('button'); dl.className = 'secondary small'; dl.textContent = 'Download';
+    dl.onclick = () => call('GET', '/api/storage/download/' + f.id + '/');
+    const sh = document.createElement('button'); sh.className = 'secondary small'; sh.textContent = 'Use for sharing';
+    sh.onclick = () => { $('shareId').value = f.id; $('linkId').value = f.id; $('shareUser').focus(); };
+    actions.append(dl, sh);
+    tr.append(actions);
+    t.append(tr);
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
+  wrap.append(t);
+  $('files').replaceChildren(wrap);
+}
+
+async function uploadBlob(blob, name, extra = {}) {
+  if (!current) return alert('Log in first.');
+  const form = new FormData();
+  form.append('file', blob, name);
+  for (const [k, v] of Object.entries(extra)) {
+    if (Array.isArray(v)) v.forEach((x) => form.append(k + '[]', x)); else if (v !== '') form.append(k, v);
+  }
+  const kb = (blob.size / 1024).toFixed(1);
+  const r = await call('POST', '/api/storage/upload/', { form, note: `Sent file: ${name} (${kb} KB)` });
+  if (r.status === 201) loadFiles();
+}
+
+$('btn-register').onclick = async () => {
+  const username = $('username').value.trim(), password = $('password').value;
+  const r = await call('POST', '/api/storage/register/', { json: { username, password }, auth: false });
+  if (r.status === 201) accounts[username] = { ...(accounts[username] || {}), id: r.data.id };
+};
+
+$('btn-login').onclick = async () => {
+  const username = $('username').value.trim(), password = $('password').value;
+  const r = await call('POST', '/api/token/', { json: { username, password }, auth: false });
+  if (r.status === 200) {
+    accounts[username] = { ...(accounts[username] || {}), access: r.data.access, refresh: r.data.refresh };
+    current = username;
+    renderWho();
+    await loadFiles();
+  }
+};
+
+$('btn-refresh').onclick = () => current ? refreshToken(current) : alert('Log in first.');
+$('btn-logout').onclick = () => { if (!current) return; delete accounts[current]; current = Object.keys(accounts)[0] || null; renderWho(); loadFiles(); };
+$('btn-notoken').onclick = () => call('GET', '/api/storage/files/', { auth: false });
+
+$('btn-upload').onclick = () => {
+  const f = $('file').files[0];
+  if (!f) return alert('Choose a file first.');
+  const ids = $('sharedWith').value.split(',').map((s) => s.trim()).filter(Boolean);
+  uploadBlob(f, f.name, { title: $('title').value, access_level: $('access').value, shared_with: ids });
+};
+
+// The standard, harmless antivirus test string (https://www.eicar.org).
+$('btn-eicar').onclick = () => uploadBlob(new Blob(['X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'], { type: 'text/plain' }), 'eicar.txt');
+$('btn-badtype').onclick = () => uploadBlob(new Blob([new Uint8Array([71,73,70,56,57,97,1,0,1,0,0,0,0,59])], { type: 'image/png' }), 'not-really.png');
+
+$('btn-list').onclick = loadFiles;
+$('btn-dl').onclick = () => { const id = $('dlId').value.trim(); if (id) call('GET', '/api/storage/download/' + encodeURIComponent(id) + '/'); };
+
+$('btn-share').onclick = async () => {
+  const r = await call('POST', '/api/storage/share/', { json: { file_id: $('shareId').value.trim(), share_with_username: $('shareUser').value.trim() } });
+  if (r.status === 200) loadFiles();
+};
+
+$('btn-link').onclick = async () => {
+  const id = $('linkId').value.trim();
+  const r = await call('POST', '/api/storage/share/' + encodeURIComponent(id) + '/', { json: { expires_in_minutes: $('linkMinutes').value } });
+  const out = $('linkOut');
+  if (r.status === 201) {
+    out.style.display = 'block';
+    out.textContent = r.data.share_link;
+    $('publicUrl').value = r.data.share_link;
+  }
+};
+
+$('btn-public').onclick = () => {
+  const url = $('publicUrl').value.trim();
+  if (!url) return;
+  let path;
+  try { path = new URL(url, API).pathname; } catch { return alert('Not a valid link.'); }
+  call('GET', path, { auth: false });
+};
+
+$('btn-clear').onclick = () => { $('log').innerHTML = '<div class="empty">Requests will appear here.</div>'; };
+</script>
+</body>
+</html>

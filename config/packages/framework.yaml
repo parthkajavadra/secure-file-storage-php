@@ -1,0 +1,38 @@
+framework:
+    secret: '%env(APP_SECRET)%'
+    http_method_override: false
+    handle_all_throwables: true
+    php_errors:
+        log: true
+    property_info:
+        with_constructor_extractor: true
+
+    # Only trust X-Forwarded-For from known proxies (prevents IP spoofing in logs and rate limits).
+    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'x-forwarded-port']
+
+    # Equivalent of DRF DEFAULT_THROTTLE_RATES
+    rate_limiter:
+        api_user:            # "user": "200/minute"
+            policy: sliding_window
+            limit: 200
+            interval: '1 minute'
+        api_anon:            # "anon": "5/minute"
+            policy: sliding_window
+            limit: 5
+            interval: '1 minute'
+        public_link:         # "public_link": "10/hour"
+            policy: sliding_window
+            limit: 10
+            interval: '1 hour'
+
+    # Replaces Celery: the background virus re-scan is a Messenger message.
+    messenger:
+        transports:
+            async: '%env(MESSENGER_TRANSPORT_DSN)%'
+        routing:
+            App\Message\ScanFileMessage: async
+
+when@test:
+    framework:
+        test: true

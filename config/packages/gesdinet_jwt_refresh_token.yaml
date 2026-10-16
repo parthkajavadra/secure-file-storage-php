@@ -1,0 +1,6 @@
+gesdinet_jwt_refresh_token:
+    refresh_token_class: App\Entity\RefreshToken
+    # SimpleJWT default REFRESH_TOKEN_LIFETIME = 1 day
+    ttl: 86400
+    # Request/response field name, same as SimpleJWT: {"refresh": "..."}
+    token_parameter_name: refresh
