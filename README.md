@@ -28,9 +28,8 @@ php -S 127.0.0.1:8000 -t public
 Then open **http://127.0.0.1:8000/tester** in your browser to try the API, or run the tests with
 `vendor/bin/phpunit`.
 
-Default settings come from `.env.dist`, so nothing needs configuring to run it locally. To change a
-setting, create a `.env` file (or `.env.local`) and override only the values you need, e.g.
-`cp .env.dist .env`.
+Every setting has a working default (see [Configuration](#configuration)), so nothing needs configuring to
+run it locally.
 
 ---
 
@@ -77,9 +76,31 @@ php -S 127.0.0.1:8000 -t public
 3. `doctrine:migrations:migrate` creates the database (`var/data.db`).
 4. `php -S ...` starts the development server (or use `symfony serve` with the Symfony CLI).
 
-Default settings are in `.env.dist`. For your own settings, create `.env` (or `.env.local`) and override
-values there; for anything beyond local development, change at least `APP_SECRET` and `JWT_PASSPHRASE`.
-Neither file is committed.
+### Configuration
+
+All settings have defaults in `config/services.yaml`:
+
+| Setting | Default |
+|---|---|
+| `APP_ENV` | `dev` |
+| `APP_SECRET` | placeholder, **change for production** |
+| `DATABASE_URL` | SQLite file `var/data.db` |
+| `JWT_SECRET_KEY` / `JWT_PUBLIC_KEY` | `config/jwt/private.pem` / `public.pem` |
+| `JWT_PASSPHRASE` | `change_me`, **change for production** |
+| `STORAGE_DIR` | `var/storage` |
+| `CLAMAV_HOST` / `CLAMAV_PORT` | `127.0.0.1` / `3310` |
+| `MESSENGER_TRANSPORT_DSN` | `sync://` |
+| `TRUSTED_PROXIES` | empty |
+
+To change one, set it as an environment variable, or create a `.env` file in the project root with just the
+values you need, for example:
+
+```
+CLAMAV_PORT=3311
+DATABASE_URL="mysql://user:pass@127.0.0.1:3306/secure_storage?serverVersion=8.0"
+```
+
+`.env` and `.env.local` are local files and must not be committed.
 
 ### ClamAV
 
@@ -113,7 +134,7 @@ Each stored file is also queued for a background re-scan (`App\Message\ScanFileM
 composer require symfony/redis-messenger
 ```
 
-Set `MESSENGER_TRANSPORT_DSN=redis://localhost:6379/messages` in your `.env`, then run a worker:
+Set `MESSENGER_TRANSPORT_DSN=redis://localhost:6379/messages` (see [Configuration](#configuration)), then run a worker:
 
 ```bash
 php bin/console messenger:consume async

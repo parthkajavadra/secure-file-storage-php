@@ -1,4 +1,17 @@
 parameters:
+    # Default settings. Each one can be overridden by a real environment variable,
+    # or by an optional .env / .env.local file in the project root (not committed).
+    env(APP_SECRET): 'change_me_to_a_random_string'
+    env(DATABASE_URL): 'sqlite:///%%kernel.project_dir%%/var/data.db'
+    env(JWT_SECRET_KEY): '%%kernel.project_dir%%/config/jwt/private.pem'
+    env(JWT_PUBLIC_KEY): '%%kernel.project_dir%%/config/jwt/public.pem'
+    env(JWT_PASSPHRASE): 'change_me'
+    env(STORAGE_DIR): '%%kernel.project_dir%%/var/storage'
+    env(CLAMAV_HOST): '127.0.0.1'
+    env(CLAMAV_PORT): '3310'
+    env(MESSENGER_TRANSPORT_DSN): 'sync://'
+    env(TRUSTED_PROXIES): ''
+
     app.storage_dir: '%env(resolve:STORAGE_DIR)%'
 
 services:
@@ -29,7 +42,7 @@ services:
             $anonLimiter: '@limiter.api_anon'
             $publicLinkLimiter: '@limiter.public_link'
 
-    # "2026-10-16 12:00:00 [WARNING] message" — same shape as the Django log formatter
+    # Log line format: "2026-10-16 12:00:00 [WARNING] message"
     app.log_formatter:
         class: Monolog\Formatter\LineFormatter
         arguments:
@@ -37,6 +50,15 @@ services:
             - 'Y-m-d H:i:s'
 
 when@test:
+    parameters:
+        env(APP_SECRET): 'test_secret'
+        env(DATABASE_URL): 'sqlite:///%%kernel.project_dir%%/var/test.db'
+        env(JWT_SECRET_KEY): '%%kernel.project_dir%%/var/jwt-test/private.pem'
+        env(JWT_PUBLIC_KEY): '%%kernel.project_dir%%/var/jwt-test/public.pem'
+        env(JWT_PASSPHRASE): 'test_passphrase'
+        env(STORAGE_DIR): '%%kernel.project_dir%%/var/test-storage'
+        env(MESSENGER_TRANSPORT_DSN): 'in-memory://'
+
     services:
         # Tests never talk to a real ClamAV daemon.
         App\Service\VirusScannerInterface:
