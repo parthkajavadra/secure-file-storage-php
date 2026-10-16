@@ -1,8 +1,16 @@
+# Local settings: each developer creates their own .env (defaults are in .env.dist)
+/.env
 /.env.local
 /.env.local.php
 /.env.*.local
+
+# JWT signing keys (generated per machine)
 /config/jwt/*.pem
+
+# Dependencies, database, logs, uploads, caches
 /vendor/
 /var/
 /.phpunit.cache/
-/.env
+
+# macOS
+.DS_Store

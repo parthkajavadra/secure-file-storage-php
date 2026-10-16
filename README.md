@@ -1,38 +1,62 @@
-# Secure File Storage & Sharing System (Symfony)
+# Secure File Storage & Sharing System
 
-A PHP / Symfony port of the Django project
-[secure-file-storage](https://github.com/parthkajavadra/secure-file-storage): a REST API for storing files
-securely and sharing them, with JWT authentication, access control, virus scanning, expiring public links,
-rate limiting and access logging.
+A REST API built with PHP and Symfony for storing files securely and sharing them, with JWT authentication,
+access control, virus scanning, expiring public links, rate limiting and access logging.
 
-The API keeps the same URLs, request fields and JSON responses as the Django/DRF version, so existing
-clients keep working (see [Differences from the Django version](#differences-from-the-django-version)).
+---
+
+## Run it locally
+
+You need **PHP 8.2+**, **[Composer](https://getcomposer.org/download/)** and **ClamAV**
+(see [ClamAV](#clamav) below for installing it).
+
+```bash
+git clone https://github.com/parthkajavadra/secure-file-storage-php.git
+cd secure-file-storage-php
+composer install
+php bin/console lexik:jwt:generate-keypair
+php bin/console doctrine:migrations:migrate -n
+```
+
+Start ClamAV and the server (keep this window open):
+
+```bash
+clamd
+php -S 127.0.0.1:8000 -t public
+```
+
+Then open **http://127.0.0.1:8000/tester** in your browser to try the API, or run the tests with
+`vendor/bin/phpunit`.
+
+Default settings come from `.env.dist`, so nothing needs configuring to run it locally. To change a
+setting, create a `.env` file (or `.env.local`) and override only the values you need, e.g.
+`cp .env.dist .env`.
 
 ---
 
 ## Features
 
-- **User authentication:** JWT access + refresh tokens (LexikJWTAuthenticationBundle + JWTRefreshTokenBundle)
-- **Secure file upload:** size and type checks, then a ClamAV scan before the file is stored
+- **User authentication:** JWT access and refresh tokens
+- **Secure file upload:** size and type checks, then a ClamAV virus scan before the file is stored
 - **File access control:** files are only accessible to their owner, users they're shared with, or everyone if public
-- **Expiring public links:** shareable URLs with an expiry time
-- **Download monitoring & centralized logging:** suspicious and security-relevant events go to `access.log`, server errors to `error.log`
-- **Rate limiting:** same limits as the DRF throttles (200/min per user, 5/min anonymous, 10/hour for public links)
-- **Background scanning:** Symfony Messenger (replaces Celery)
-- **Tests:** PHPUnit functional tests
+- **Expiring public links:** shareable download URLs with an expiry time
+- **Download monitoring & centralized logging:** security-relevant events go to `access.log`, server errors to `error.log`
+- **Rate limiting:** per-user and per-IP request limits to prevent abuse
+- **Background scanning:** stored files are re-scanned asynchronously with Symfony Messenger
+- **Tests:** PHPUnit functional test suite
 
 ## Tech stack
 
-| Django project | This project |
+| Area | Technology |
 |---|---|
-| Django 5 + Django REST Framework | Symfony 7.4 (LTS) |
-| Django ORM + migrations | Doctrine ORM 3 + Doctrine Migrations |
-| djangorestframework-simplejwt | lexik/jwt-authentication-bundle + gesdinet/jwt-refresh-token-bundle |
-| pyClamd | Built-in ClamAV client (`src/Service/ClamAvScanner.php`, clamd `INSTREAM` over TCP) |
-| Celery + Redis | Symfony Messenger |
-| DRF throttling | Symfony RateLimiter |
-| Python `logging` (RotatingFileHandler) | Monolog |
-| Django `TestCase` + coverage.py | PHPUnit |
+| Framework | Symfony 7.4 (LTS), PHP 8.2+ |
+| Database | Doctrine ORM 3 + Doctrine Migrations (SQLite by default; MySQL/PostgreSQL supported) |
+| Authentication | lexik/jwt-authentication-bundle + gesdinet/jwt-refresh-token-bundle |
+| Virus scanning | ClamAV (`clamd`) via a built-in client (`src/Service/ClamAvScanner.php`) |
+| Background jobs | Symfony Messenger |
+| Rate limiting | Symfony RateLimiter |
+| Logging | Monolog |
+| Testing | PHPUnit |
 
 ---
 
@@ -42,58 +66,64 @@ Requirements: PHP 8.2+ with the `ctype`, `fileinfo`, `iconv`, `openssl` and `pdo
 and a running ClamAV daemon (`clamd`) for uploads.
 
 ```bash
-# 1. Install dependencies
 composer install
-
-# 2. Local settings (optional): copy values from .env into .env.local and change them,
-#    at least APP_SECRET and JWT_PASSPHRASE
-cp .env .env.local
-
-# 3. Generate the JWT signing keys (written to config/jwt/)
 php bin/console lexik:jwt:generate-keypair
-
-# 4. Create the database (SQLite by default, var/data.db)
 php bin/console doctrine:migrations:migrate
-
-# 5. Run the server
-symfony serve            # with the Symfony CLI, or:
 php -S 127.0.0.1:8000 -t public
 ```
 
+1. `composer install` installs the dependencies.
+2. `lexik:jwt:generate-keypair` creates the keys used to sign login tokens (in `config/jwt/`).
+3. `doctrine:migrations:migrate` creates the database (`var/data.db`).
+4. `php -S ...` starts the development server (or use `symfony serve` with the Symfony CLI).
+
+Default settings are in `.env.dist`. For your own settings, create `.env` (or `.env.local`) and override
+values there; for anything beyond local development, change at least `APP_SECRET` and `JWT_PASSPHRASE`.
+Neither file is committed.
+
 ### ClamAV
 
-Uploads are scanned by `clamd` at `CLAMAV_HOST:CLAMAV_PORT` (default `127.0.0.1:3310`). Files are streamed
-to the daemon, so it can run in another container. For local development:
+Uploads are scanned by `clamd` at `CLAMAV_HOST:CLAMAV_PORT` (default `127.0.0.1:3310`). Files are streamed to
+the daemon, so it can also run on another machine or in a container.
+
+On macOS with Homebrew:
 
 ```bash
-docker run -d --name clamav -p 3310:3310 clamav/clamav
+brew install clamav
+cd /opt/homebrew/etc/clamav
+cp freshclam.conf.sample freshclam.conf
+cp clamd.conf.sample clamd.conf
+sed -i '' 's/^Example/#Example/' freshclam.conf clamd.conf
+printf "TCPSocket 3310\nTCPAddr 127.0.0.1\n" >> clamd.conf
+mkdir -p /opt/homebrew/var/lib/clamav
+freshclam
+clamd
 ```
 
-As in the original project, **if ClamAV can't be reached the upload is rejected** (fail closed).
+Or with Docker: `docker run -d --name clamav -p 3310:3310 clamav/clamav`
 
-### Background scanning (replaces Celery)
+**If ClamAV can't be reached, uploads are rejected** (fail closed), so no file is ever stored unscanned.
+
+### Background scanning
 
 Each stored file is also queued for a background re-scan (`App\Message\ScanFileMessage`). By default
-`MESSENGER_TRANSPORT_DSN=sync://` runs it immediately. To use Redis like the Celery setup:
+`MESSENGER_TRANSPORT_DSN=sync://` runs it immediately. To use a real queue with Redis:
 
 ```bash
 composer require symfony/redis-messenger
-# .env.local
-MESSENGER_TRANSPORT_DSN=redis://localhost:6379/messages
-# worker
+```
+
+Set `MESSENGER_TRANSPORT_DSN=redis://localhost:6379/messages` in your `.env`, then run a worker:
+
+```bash
 php bin/console messenger:consume async
 ```
 
-### Testing by hand in the browser
+---
 
-With the server running in the dev environment (the default), open **http://127.0.0.1:8000/tester**.
-It's a small page for trying every endpoint: register and log in several users, switch between them,
-upload files (including an EICAR test virus and a disallowed file type), download, share, create and open
-public links. Every request and response shows up in a log on the right.
+## Testing
 
-The page only exists when `APP_ENV=dev` (route in `config/routes/dev/`); in production it returns 404.
-
-### Running tests
+### Automated tests
 
 ```bash
 vendor/bin/phpunit
@@ -101,6 +131,16 @@ vendor/bin/phpunit
 
 The tests use a separate SQLite database (`var/test.db`), create their own throw-away JWT keys, and replace
 ClamAV with a fake scanner, so no external services are needed.
+
+### Testing by hand in the browser
+
+With the server running in the dev environment (the default), open **http://127.0.0.1:8000/tester**.
+It's a small page for trying every endpoint: register and log in several users, switch between them,
+upload files, download, share, and create and open public links. It also has buttons that send an EICAR
+test virus and a disallowed file type to check that both are rejected. Every request and response shows up
+in a log on the right.
+
+The page only exists when `APP_ENV=dev` (route in `config/routes/dev/`); in production it returns 404.
 
 ---
 
@@ -120,6 +160,8 @@ All endpoints except those marked *public* need `Authorization: Bearer <access t
 | POST | `/api/storage/share/{id}/` | `{"expires_in_minutes"}` | Create an expiring public link for your file |
 | GET | `/api/storage/public/{token}/` | | *Public.* Download via a public link |
 
+Access tokens are valid for 5 minutes and refresh tokens for 1 day.
+
 Example:
 
 ```bash
@@ -135,14 +177,32 @@ curl -X POST http://127.0.0.1:8000/api/storage/upload/ -H "Authorization: Bearer
 
 ### Rate limits
 
-Same as the DRF settings in the original: authenticated users 200 requests/minute; anonymous clients
-5 requests/minute per IP — shared across login, token refresh, register and public downloads, exactly as
-DRF's `anon` throttle was — and public-link downloads additionally 10/hour per IP. Over the limit the API
-returns `429` with a `Retry-After` header.
+| Who | Limit |
+|---|---|
+| Authenticated users | 200 requests/minute |
+| Anonymous clients (login, token refresh, register, public downloads) | 5 requests/minute per IP, shared |
+| Public-link downloads | additionally 10/hour per IP |
+
+Over the limit the API returns `429` with a `Retry-After` header.
 
 ### Logs
 
-`var/log/access-YYYY-MM-DD.log` and `var/log/error-YYYY-MM-DD.log` (rotated daily, 3 files kept).
+`var/log/access-YYYY-MM-DD.log` and `var/log/error-YYYY-MM-DD.log` (rotated daily, 3 files kept). The access
+log records refused requests (400/401/403/404/405), rejected uploads, public link creation and downloads,
+and attempts to use invalid or expired links.
+
+---
+
+## Security design
+
+- **Files are never served from a public URL.** Uploads live in `var/storage/`, outside the web root, and are
+  only available through the access-checked download endpoints.
+- **File type is detected from the file's content**, not trusted from the client's `Content-Type` header.
+- **Upload names are sanitized** (no path traversal), and duplicates get a random suffix instead of overwriting.
+- **Every upload is virus-scanned before it is stored**, and rejected if the scanner is unavailable.
+- **Client IPs are only taken from trusted proxies**, so `X-Forwarded-For` can't be forged to dodge rate limits
+  or falsify logs. Set `TRUSTED_PROXIES` if you run behind a reverse proxy.
+- **Passwords are hashed** with Symfony's `auto` hasher (bcrypt/Argon2).
 
 ---
 
@@ -150,46 +210,20 @@ returns `429` with a `Retry-After` header.
 
 ```
 src/
-  Controller/StorageController.php   ← storage/views.py + serializers
-  Controller/AuthController.php      ← token endpoint routes (handled by the security firewall)
-  Entity/                            ← storage/models.py (+ User, RefreshToken)
-  Repository/                        ← query logic (e.g. "accessible files")
-  Service/ClamAvScanner.php          ← storage/utils/virus_scan.py
-  Service/FileStorage.php            ← where uploads are stored
-  Message/, MessageHandler/          ← storage/tasks.py (Celery task)
-  EventSubscriber/AccessLogSubscriber.php ← core/middleware/access_log_middleware.py
-  EventSubscriber/ThrottleSubscriber.php  ← DRF throttles + storage/throttles.py
-  EventSubscriber/JwtResponseSubscriber.php ← SimpleJWT-compatible token responses
-config/packages/                     ← core/settings.py
-migrations/                          ← storage/migrations/
-tests/                               ← storage/tests.py
+  Controller/StorageController.php       ← storage, sharing and public-link endpoints
+  Controller/AuthController.php          ← token endpoint routes (handled by the security firewall)
+  Controller/DevTesterController.php     ← browser test page (dev only)
+  Entity/                                ← User, File, PublicShareLink, RefreshToken
+  Repository/                            ← database queries (e.g. "files a user can access")
+  Service/ClamAvScanner.php              ← ClamAV client
+  Service/FileStorage.php                ← where uploads are stored
+  Message/, MessageHandler/              ← background virus re-scan
+  EventSubscriber/AccessLogSubscriber.php    ← access and error logging
+  EventSubscriber/ThrottleSubscriber.php     ← rate limiting
+  EventSubscriber/JwtResponseSubscriber.php  ← token response format and auth errors
+  Http/                                  ← request parsing, validation and JSON responses
+config/packages/                         ← framework, security, database, logging configuration
+migrations/                              ← database schema
+tests/                                   ← PHPUnit tests
+tools/tester.html                        ← browser test page
 ```
-
----
-
-## Differences from the Django version
-
-Mostly deliberate security fixes; everything else behaves the same.
-
-- **Files are never served from a public URL.** Django served `media/` directly in DEBUG mode, which bypassed
-  the access checks. Files now live in `var/storage/` (outside the web root) and are only available through the
-  download endpoints. The `file` field in responses is the stored path; a new `download_url` field gives the
-  access-checked URL.
-- **File type is detected from the content**, not trusted from the client's `Content-Type` header.
-- **Upload names are sanitized** and the upload is scanned in place. The original wrote to `/tmp/<client
-  filename>`, which allowed path traversal.
-- **Client IPs use trusted proxies only.** The original took the first `X-Forwarded-For` value, which any
-  client can forge in logs. Set `TRUSTED_PROXIES` if you run behind a reverse proxy.
-- **View log messages reach `access.log`.** In the Django code the views logged to `access_logger`, which
-  wasn't configured, so those messages never reached the file.
-- `expires_in_minutes` is capped at 10 years so the expiry date can't overflow (Django would return a 500).
-- `/api/token/` accepts JSON only (DRF also accepted form data). A form-encoded request gets a 400 explaining this.
-- Uploaded duplicate names get a random 7-character suffix, similar to Django's storage.
-
-### Not ported
-
-- **Django admin** (`/admin/`). If you need one, [EasyAdmin](https://symfony.com/bundles/EasyAdminBundle) is the usual choice.
-- `storage/permissions.py` (`IsOwnerSharedOrPublic`) and `UserFileListView` were not used by any route
-  in the original; the same rule lives in `File::canBeAccessedBy()`.
-- **Existing data:** passwords stored by Django (PBKDF2) can't be verified by this app, so existing users would need
-  to reset their passwords if you migrate an existing database.
